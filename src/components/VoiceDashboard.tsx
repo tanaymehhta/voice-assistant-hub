@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { PhoneOff, ArrowLeft, Clock, Calendar, Mic, MicOff } from "lucide-react";
+import { PhoneOff, ArrowLeft, Clock, Calendar, Mic, MicOff, ExternalLink } from "lucide-react";
 import { useConversation } from "@11labs/react";
 
 interface VoiceDashboardProps {
@@ -21,22 +21,32 @@ const TOTAL_SECONDS = 120;
 const WARNING_SECONDS = 30;
 const CALENDLY_URL = "https://calendly.com/tmehta1-babson/30min";
 
+const SUGGESTED_QUESTIONS = [
+  "Are you pet-friendly?",
+  "What rooms are available?",
+  "How do I get to Lake Tahoe?",
+  "Best season to visit?",
+  "I'd like to make a reservation",
+];
+
 const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
-  const [status, setStatus] = useState<"connecting" | "active" | "ended">("connecting");
+  const [status, setStatus] = useState<"intro" | "connecting" | "active" | "ended">("intro");
   const [timeLeft, setTimeLeft] = useState(TOTAL_SECONDS);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [showCalendly, setShowCalendly] = useState(false);
+  const [introCountdown, setIntroCountdown] = useState(5);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const entryIdRef = useRef(0);
+  const endedRef = useRef(false);
 
   const conversation = useConversation({
     onConnect: () => {
       setStatus("active");
     },
     onDisconnect: () => {
-      if (status !== "ended") {
+      if (!endedRef.current) {
         handleEnd();
       }
     },
@@ -60,21 +70,26 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
 
-  // Start session when opened
+  const startConversation = useCallback(() => {
+    setStatus("connecting");
+    conversation.startSession({
+      agentId: AGENT_ID,
+    }).catch((err) => {
+      console.error("Failed to start ElevenLabs session:", err);
+    });
+  }, [conversation]);
+
+  // Reset state when opened
   useEffect(() => {
     if (open) {
-      setStatus("connecting");
+      endedRef.current = false;
+      setStatus("intro");
       setTimeLeft(TOTAL_SECONDS);
       setTranscript([]);
       setIsMuted(false);
       setShowCalendly(false);
+      setIntroCountdown(5);
       entryIdRef.current = 0;
-
-      conversation.startSession({
-        agentId: AGENT_ID,
-      }).catch((err) => {
-        console.error("Failed to start ElevenLabs session:", err);
-      });
 
       return () => {
         cleanup();
@@ -83,6 +98,17 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Intro countdown
+  useEffect(() => {
+    if (status !== "intro") return;
+    if (introCountdown <= 0) {
+      startConversation();
+      return;
+    }
+    const id = setTimeout(() => setIntroCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [status, introCountdown, startConversation]);
 
   // Timer countdown
   useEffect(() => {
@@ -112,6 +138,8 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
   }, [transcript]);
 
   const handleEnd = useCallback(() => {
+    if (endedRef.current) return;
+    endedRef.current = true;
     cleanup();
     setStatus("ended");
     conversation.endSession().catch(() => {});
@@ -119,9 +147,9 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
   }, [cleanup, conversation]);
 
   const handleClose = () => {
+    endedRef.current = true;
     cleanup();
     conversation.endSession().catch(() => {});
-    setStatus("connecting");
     onClose();
   };
 
@@ -162,9 +190,9 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
             </button>
 
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500 animate-pulse" : status === "connecting" ? "bg-yellow-500 animate-pulse" : "bg-muted-foreground"}`} />
+              <div className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500 animate-pulse" : status === "connecting" ? "bg-yellow-500 animate-pulse" : status === "intro" ? "bg-blue-500" : "bg-muted-foreground"}`} />
               <span className="text-sm font-medium text-foreground">
-                {status === "connecting" ? "Connecting..." : status === "active" ? "AI Receptionist" : "Call Ended"}
+                {status === "intro" ? "AI Receptionist Demo" : status === "connecting" ? "Connecting..." : status === "active" ? "AI Receptionist" : "Call Ended"}
               </span>
             </div>
 
@@ -174,8 +202,106 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
             </div>
           </div>
 
+          {/* Intro Screen — full-bleed with hero image */}
+          <AnimatePresence>
+            {status === "intro" && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, y: -60 }}
+                transition={{ duration: 0.4 }}
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center"
+                style={{ top: "4rem" }}
+              >
+                {/* Background image */}
+                <div className="absolute inset-0 overflow-hidden">
+                  <img
+                    src="/coachman-hero.jpg"
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/60" />
+                </div>
+
+                {/* Content over image */}
+                <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-2xl">
+                  {/* Logo */}
+                  <motion.img
+                    src="/coachman-logo.png"
+                    alt="The Coachman Hotel"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="w-48 md:w-64 mb-6 drop-shadow-lg"
+                  />
+
+                  <motion.p
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="text-white/70 text-base md:text-lg tracking-wide"
+                  >
+                    South Lake Tahoe, California
+                  </motion.p>
+
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="w-16 h-px bg-white/30 my-6"
+                  />
+
+                  <motion.p
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="text-white text-xl md:text-2xl font-light leading-relaxed"
+                  >
+                    You're about to speak with their AI receptionist
+                  </motion.p>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 }}
+                    className="mt-8 text-white/50 text-sm md:text-base space-y-1.5"
+                  >
+                    <p className="text-white/70 font-medium mb-3">Try asking</p>
+                    {SUGGESTED_QUESTIONS.map((q) => (
+                      <p key={q} className="leading-relaxed">&ldquo;{q}&rdquo;</p>
+                    ))}
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1 }}
+                    className="mt-10 flex flex-col items-center gap-2"
+                  >
+                    <button
+                      onClick={startConversation}
+                      className="text-white/60 text-xs hover:text-white transition-colors"
+                    >
+                      Skip — start now
+                    </button>
+                  </motion.div>
+                </div>
+
+                {/* Progress bar at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+                  <motion.div
+                    className="h-full bg-white/40"
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 5, ease: "linear" }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Main content */}
-          <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)]">
+          <div className={`flex flex-col lg:flex-row h-[calc(100vh-4rem)] ${status === "intro" ? "invisible" : ""}`}>
             {/* Left: Transcript panel */}
             <div className="flex-1 flex flex-col border-r border-border/40 min-h-0">
               <div className="px-5 py-4 border-b border-border/20">
@@ -301,6 +427,31 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
               </div>
 
               <div className="flex-1 p-5 space-y-5 overflow-y-auto">
+                {/* Context line */}
+                <AnimatePresence>
+                  {status !== "intro" && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.4, delay: 0.2 }}
+                      className="pb-4 border-b border-border/20"
+                    >
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Talking to</p>
+                      <p className="text-sm font-semibold text-foreground">Coachman Hotel · Lake Tahoe</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">AI Receptionist</p>
+                      <a
+                        href="https://www.coachmantahoe.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1.5"
+                      >
+                        coachmantahoe.com
+                        <ExternalLink size={10} />
+                      </a>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* Timer card */}
                 <div className="glass-card rounded-xl p-5">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Time Remaining</p>
