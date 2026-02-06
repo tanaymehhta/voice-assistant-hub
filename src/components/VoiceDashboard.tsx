@@ -35,7 +35,6 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [showCalendly, setShowCalendly] = useState(false);
-  const [introCountdown, setIntroCountdown] = useState(5);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const entryIdRef = useRef(0);
@@ -88,7 +87,6 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
       setTranscript([]);
       setIsMuted(false);
       setShowCalendly(false);
-      setIntroCountdown(5);
       entryIdRef.current = 0;
 
       return () => {
@@ -99,16 +97,7 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Intro countdown
-  useEffect(() => {
-    if (status !== "intro") return;
-    if (introCountdown <= 0) {
-      startConversation();
-      return;
-    }
-    const id = setTimeout(() => setIntroCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [status, introCountdown, startConversation]);
+  // No auto-start — user must click the button to begin
 
   // Timer countdown
   useEffect(() => {
@@ -280,21 +269,12 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                   >
                     <button
                       onClick={startConversation}
-                      className="text-white/60 text-xs hover:text-white transition-colors"
+                      className="flex items-center gap-3 px-8 py-4 rounded-full bg-white text-black font-semibold text-base hover:bg-white/90 transition-colors shadow-lg"
                     >
-                      Skip — start now
+                      <Mic size={20} />
+                      Start Call
                     </button>
                   </motion.div>
-                </div>
-
-                {/* Progress bar at bottom */}
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
-                  <motion.div
-                    className="h-full bg-white/40"
-                    initial={{ width: "0%" }}
-                    animate={{ width: "100%" }}
-                    transition={{ duration: 5, ease: "linear" }}
-                  />
                 </div>
               </motion.div>
             )}
