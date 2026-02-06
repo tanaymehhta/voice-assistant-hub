@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { PhoneOff, ArrowLeft, Clock, Calendar, Mic, MicOff } from "lucide-react";
+import { useConversation } from "@11labs/react";
 
 interface VoiceDashboardProps {
   open: boolean;
@@ -13,24 +14,12 @@ interface TranscriptEntry {
   sender: "user" | "assistant";
   text: string;
   timestamp: number;
-  responseTime?: number;
 }
 
+const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID;
 const TOTAL_SECONDS = 120;
 const WARNING_SECONDS = 30;
-const CALENDLY_URL = "https://calendly.com";
-
-const mockConversation: { sender: "user" | "assistant"; text: string; delay: number; responseTime?: number }[] = [
-  { sender: "assistant", text: "Good evening! Welcome to The Grand Hotel. How may I assist you today?", delay: 2000 },
-  { sender: "user", text: "Hi, I'd like to book a room for this Friday and Saturday.", delay: 6000 },
-  { sender: "assistant", text: "Of course! I'd be happy to help with that. How many guests will be staying, and do you have a room type preference?", delay: 8500, responseTime: 1.2 },
-  { sender: "user", text: "Two guests. A king bed would be great if you have one.", delay: 14000 },
-  { sender: "assistant", text: "Wonderful! We have a King Deluxe Suite available for Friday and Saturday at $189 per night. It includes complimentary breakfast and late checkout. Shall I reserve that for you?", delay: 16500, responseTime: 0.9 },
-  { sender: "user", text: "That sounds perfect. Can I also get a room with a city view?", delay: 23000 },
-  { sender: "assistant", text: "Let me check our city-view inventory... Great news — we have one King Deluxe with a panoramic city view on the 12th floor. It's $219 per night. Would you prefer that instead?", delay: 25500, responseTime: 1.4 },
-  { sender: "user", text: "Yes, let's go with the city view.", delay: 32000 },
-  { sender: "assistant", text: "Excellent choice! I've reserved the King Deluxe City View for two nights. Could I get your name and email to confirm the booking?", delay: 34000, responseTime: 0.8 },
-];
+const CALENDLY_URL = "https://calendly.com/tmehta1-babson/30min";
 
 const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
   const [status, setStatus] = useState<"connecting" | "active" | "ended">("connecting");
@@ -40,13 +29,35 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
   const [showCalendly, setShowCalendly] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const mockRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const entryIdRef = useRef(0);
+
+  const conversation = useConversation({
+    onConnect: () => {
+      setStatus("active");
+    },
+    onDisconnect: () => {
+      if (status !== "ended") {
+        handleEnd();
+      }
+    },
+    onMessage: (props: { message: string; source: string }) => {
+      const { message, source } = props;
+      if (!message.trim()) return;
+      const entry: TranscriptEntry = {
+        id: entryIdRef.current++,
+        sender: source === "ai" ? "assistant" : "user",
+        text: message,
+        timestamp: Date.now(),
+      };
+      setTranscript((prev) => [...prev, entry]);
+    },
+    onError: (error: string) => {
+      console.error("ElevenLabs error:", error);
+    },
+  });
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    mockRef.current.forEach(clearTimeout);
-    mockRef.current = [];
   }, []);
 
   // Start session when opened
@@ -59,13 +70,15 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
       setShowCalendly(false);
       entryIdRef.current = 0;
 
-      const connectTimer = setTimeout(() => {
-        setStatus("active");
-      }, 1800);
+      conversation.startSession({
+        agentId: AGENT_ID,
+      }).catch((err) => {
+        console.error("Failed to start ElevenLabs session:", err);
+      });
 
       return () => {
-        clearTimeout(connectTimer);
         cleanup();
+        conversation.endSession().catch(() => {});
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,26 +104,6 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  // Mock conversation playback
-  useEffect(() => {
-    if (status === "active") {
-      mockConversation.forEach((msg) => {
-        const timer = setTimeout(() => {
-          const entry: TranscriptEntry = {
-            id: entryIdRef.current++,
-            sender: msg.sender,
-            text: msg.text,
-            timestamp: Date.now(),
-            responseTime: msg.responseTime,
-          };
-          setTranscript((prev) => [...prev, entry]);
-        }, msg.delay);
-        mockRef.current.push(timer);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
   // Auto-scroll transcript
   useEffect(() => {
     if (transcriptRef.current) {
@@ -121,13 +114,22 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
   const handleEnd = useCallback(() => {
     cleanup();
     setStatus("ended");
+    conversation.endSession().catch(() => {});
     setTimeout(() => setShowCalendly(true), 600);
-  }, [cleanup]);
+  }, [cleanup, conversation]);
 
   const handleClose = () => {
     cleanup();
+    conversation.endSession().catch(() => {});
     setStatus("connecting");
     onClose();
+  };
+
+  const toggleMute = () => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    // ElevenLabs SDK handles mute via volume
+    conversation.setVolume({ volume: newMuted ? 0 : 1 });
   };
 
   const formatTime = (s: number) => {
@@ -162,7 +164,7 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500 animate-pulse" : status === "connecting" ? "bg-yellow-500 animate-pulse" : "bg-muted-foreground"}`} />
               <span className="text-sm font-medium text-foreground">
-                {status === "connecting" ? "Connecting..." : status === "active" ? "Hotel Receptionist" : "Call Ended"}
+                {status === "connecting" ? "Connecting..." : status === "active" ? "AI Receptionist" : "Call Ended"}
               </span>
             </div>
 
@@ -192,7 +194,18 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                         <Mic size={24} className="text-primary-foreground" />
                       </div>
                       <p className="text-muted-foreground">Setting up your voice session...</p>
+                      <p className="text-xs text-muted-foreground mt-2">Allow microphone access when prompted</p>
                     </div>
+                  </motion.div>
+                )}
+
+                {status === "active" && transcript.length === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex items-center justify-center h-full"
+                  >
+                    <p className="text-muted-foreground text-sm">Listening... Start speaking to begin the conversation.</p>
                   </motion.div>
                 )}
 
@@ -212,12 +225,6 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                       }`}>
                         {entry.text}
                       </div>
-                      {entry.responseTime && (
-                        <span className="text-xs text-muted-foreground px-1 flex items-center gap-1">
-                          <Clock size={10} />
-                          {entry.responseTime}s response
-                        </span>
-                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -232,7 +239,7 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                       className="bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 text-center"
                     >
                       <p className="text-sm font-medium text-destructive">
-                        ⏱ Last {timeLeft} seconds of your free trial
+                        Last {timeLeft} seconds of your free trial
                       </p>
                     </motion.div>
                   )}
@@ -244,11 +251,11 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                 <div className="px-5 py-4 border-t border-border/20 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={() => setIsMuted(!isMuted)}
+                      onClick={toggleMute}
                       className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                         isMuted ? "bg-destructive/10 text-destructive" : "bg-secondary text-secondary-foreground hover:bg-secondary/70"
                       }`}
-                      aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
+                      aria-label={isMuted ? "Unmute" : "Mute"}
                     >
                       {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
                     </button>
@@ -256,14 +263,26 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                     {/* Voice wave indicator */}
                     {!isMuted && (
                       <div className="flex items-end gap-[2px] h-5">
-                        {[0.3, 0.7, 1, 0.6, 0.9, 0.4, 0.8].map((h, i) => (
-                          <div
-                            key={i}
-                            className="w-[3px] rounded-full bg-primary animate-voice-wave"
-                            style={{ height: `${h * 100}%`, animationDelay: `${i * 0.12}s` }}
-                          />
-                        ))}
+                        {conversation.isSpeaking
+                          ? [0.3, 0.7, 1, 0.6, 0.9, 0.4, 0.8].map((h, i) => (
+                              <div
+                                key={i}
+                                className="w-[3px] rounded-full bg-primary animate-voice-wave"
+                                style={{ height: `${h * 100}%`, animationDelay: `${i * 0.12}s` }}
+                              />
+                            ))
+                          : [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2].map((h, i) => (
+                              <div
+                                key={i}
+                                className="w-[3px] rounded-full bg-muted-foreground/40"
+                                style={{ height: `${h * 100}%` }}
+                              />
+                            ))}
                       </div>
+                    )}
+
+                    {conversation.isSpeaking && (
+                      <span className="text-xs text-muted-foreground">AI speaking...</span>
                     )}
                   </div>
 
@@ -288,7 +307,6 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                   <p className={`text-3xl font-bold font-mono ${isWarning ? "text-destructive" : "text-foreground"}`}>
                     {formatTime(timeLeft)}
                   </p>
-                  {/* Progress bar */}
                   <div className="mt-3 h-1.5 bg-secondary rounded-full overflow-hidden">
                     <motion.div
                       className={`h-full rounded-full ${isWarning ? "bg-destructive" : "gradient-cta"}`}
@@ -297,22 +315,6 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                       transition={{ duration: 0.5 }}
                     />
                   </div>
-                </div>
-
-                {/* Response time card */}
-                <div className="glass-card rounded-xl p-5">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Avg Response Time</p>
-                  <p className="text-3xl font-bold text-foreground">
-                    {transcript.filter((t) => t.responseTime).length > 0
-                      ? `${(
-                          transcript
-                            .filter((t) => t.responseTime)
-                            .reduce((sum, t) => sum + (t.responseTime || 0), 0) /
-                          transcript.filter((t) => t.responseTime).length
-                        ).toFixed(1)}s`
-                      : "—"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">Real-time AI processing</p>
                 </div>
 
                 {/* Messages count */}
@@ -365,7 +367,7 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
 
                   <h3 className="text-2xl font-bold text-foreground mb-2">Thanks for trying VoiceX!</h3>
                   <p className="text-muted-foreground mb-2 text-sm">
-                    You experienced how our AI handles hotel reception calls naturally and professionally.
+                    You just experienced how our AI handles calls naturally and professionally.
                   </p>
 
                   {/* Quick stats */}
@@ -373,19 +375,6 @@ const VoiceDashboard = ({ open, onClose }: VoiceDashboardProps) => {
                     <div>
                       <p className="text-lg font-bold text-foreground">{transcript.length}</p>
                       <p className="text-xs text-muted-foreground">Messages</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-foreground">
-                        {transcript.filter((t) => t.responseTime).length > 0
-                          ? `${(
-                              transcript
-                                .filter((t) => t.responseTime)
-                                .reduce((sum, t) => sum + (t.responseTime || 0), 0) /
-                              transcript.filter((t) => t.responseTime).length
-                            ).toFixed(1)}s`
-                          : "—"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Avg Response</p>
                     </div>
                     <div>
                       <p className="text-lg font-bold text-foreground">{formatTime(TOTAL_SECONDS - timeLeft)}</p>

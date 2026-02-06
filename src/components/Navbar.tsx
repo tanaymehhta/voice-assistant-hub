@@ -23,7 +23,7 @@ const Navbar = () => {
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-2">
           <Button variant="heroPill" size="default" asChild>
-            <a href="#demo">Book Demo</a>
+            <a href="https://calendly.com/tmehta1-babson/30min" target="_blank" rel="noopener noreferrer">Book Demo</a>
           </Button>
         </div>
 
@@ -48,7 +48,7 @@ const Navbar = () => {
           >
             <div className="p-4 flex flex-col gap-3">
               <Button variant="heroPill" size="default" asChild className="w-full">
-                <a href="#demo">Book Demo</a>
+                <a href="https://calendly.com/tmehta1-babson/30min" target="_blank" rel="noopener noreferrer">Book Demo</a>
               </Button>
             </div>
           </motion.div>

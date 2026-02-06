@@ -43,8 +43,8 @@ const HeroSection = () => {
                 </a>
               </Button>
               <Button variant="ghost" size="lg" asChild className="text-muted-foreground">
-                <a href="#how-it-works" className="gap-1">
-                  See How It Works
+                <a href="#why-voicex" className="gap-1">
+                  Why VoiceX?
                   <ArrowRight size={16} />
                 </a>
               </Button>

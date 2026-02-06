@@ -21,14 +21,14 @@ const CTASection = () => {
           </p>
 
           <Button variant="hero" size="xl" asChild>
-            <a href="#demo" className="gap-2">
+            <a href="https://calendly.com/tmehta1-babson/30min" target="_blank" rel="noopener noreferrer" className="gap-2">
               Book Your Setup Call
               <ArrowRight size={18} />
             </a>
           </Button>
 
           <p className="text-sm text-muted-foreground mt-5">
-            Free 14-day trial · No credit card required
+            15-minute call · We'll set everything up for you
           </p>
         </motion.div>
       </div>
