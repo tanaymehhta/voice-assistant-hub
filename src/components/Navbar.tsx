@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import VoiceXLogo from "./VoiceXLogo";
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -9,15 +10,8 @@ const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border/40">
       <div className="container mx-auto flex items-center justify-between h-16 px-4 md:px-8">
-        <a href="/" className="flex items-center gap-2" aria-label="VoiceX Home">
-          <div className="w-8 h-8 rounded-lg gradient-cta flex items-center justify-center">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-primary-foreground">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <span className="text-lg font-bold text-foreground tracking-tight">VoiceX</span>
+        <a href="/" className="flex items-center" aria-label="VoiceX Home">
+          <VoiceXLogo height={24} className="text-foreground" />
         </a>
 
         {/* Desktop nav */}
