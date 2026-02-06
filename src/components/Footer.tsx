@@ -9,11 +9,13 @@ const Footer = () => {
             <VoiceXLogo height={18} className="text-foreground" />
           </div>
 
-          <nav className="flex items-center gap-6 text-sm text-muted-foreground" aria-label="Footer navigation">
-            <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
-            <a href="#" className="hover:text-foreground transition-colors">Terms</a>
-            <a href="#" className="hover:text-foreground transition-colors">Contact</a>
-          </nav>
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Tanay Mehta</span>
+            <span>·</span>
+            <a href="tel:+18579198811" className="hover:text-foreground transition-colors">+1 (857) 919-8811</a>
+            <span>·</span>
+            <a href="https://www.linkedin.com/in/tanay-mehta17/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">LinkedIn</a>
+          </div>
 
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} VoiceX. All rights reserved.
